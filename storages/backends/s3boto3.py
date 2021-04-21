@@ -15,6 +15,7 @@ from django.core.files.base import File
 from django.utils.deconstruct import deconstructible
 from django.utils.encoding import filepath_to_uri
 from django.utils.timezone import is_naive, make_naive
+from threadlocals.threadlocals import get_request_variable
 
 from storages.base import BaseStorage
 from storages.utils import (
@@ -78,6 +79,8 @@ else:
             'An RSA backend is required for signing cloudfront URLs.\n'
             'Supported backends are packages: cryptography and rsa.')
 
+def get_setting(key, default=None):
+    return get_request_variable(key, setting(key, default))
 
 @deconstructible
 class S3Boto3StorageFile(File):
@@ -117,7 +120,7 @@ class S3Boto3StorageFile(File):
         # Amazon allows up to 10,000 parts.  The default supports uploads
         # up to roughly 50 GB.  Increase the part size to accommodate
         # for files larger than this.
-        self.buffer_size = buffer_size or setting('AWS_S3_FILE_BUFFER_SIZE', 5242880)
+        self.buffer_size = buffer_size or get_setting('AWS_S3_FILE_BUFFER_SIZE', 5242880)
         self._write_counter = 0
 
     @property
@@ -129,7 +132,7 @@ class S3Boto3StorageFile(File):
             self._file = SpooledTemporaryFile(
                 max_size=self._storage.max_memory_size,
                 suffix=".S3Boto3StorageFile",
-                dir=setting("FILE_UPLOAD_TEMP_DIR")
+                dir=get_setting("FILE_UPLOAD_TEMP_DIR")
             )
             if 'r' in self._mode:
                 self._is_dirty = False
@@ -280,8 +283,8 @@ class S3Boto3Storage(BaseStorage):
         return _cloud_front_signer_from_pem(key_id, key)
 
     def get_default_settings(self):
-        cloudfront_key_id = setting('AWS_CLOUDFRONT_KEY_ID')
-        cloudfront_key = setting('AWS_CLOUDFRONT_KEY')
+        cloudfront_key_id = get_setting('AWS_CLOUDFRONT_KEY_ID')
+        cloudfront_key = get_setting('AWS_CLOUDFRONT_KEY')
         if bool(cloudfront_key_id) ^ bool(cloudfront_key):
             raise ImproperlyConfigured(
                 'Both AWS_CLOUDFRONT_KEY_ID and AWS_CLOUDFRONT_KEY must be '
@@ -294,36 +297,36 @@ class S3Boto3Storage(BaseStorage):
             cloudfront_signer = None
 
         return {
-            "access_key": setting('AWS_S3_ACCESS_KEY_ID', setting('AWS_ACCESS_KEY_ID')),
-            "secret_key": setting('AWS_S3_SECRET_ACCESS_KEY', setting('AWS_SECRET_ACCESS_KEY')),
-            "file_overwrite": setting('AWS_S3_FILE_OVERWRITE', True),
-            "object_parameters": setting('AWS_S3_OBJECT_PARAMETERS', {}),
-            "bucket_name": setting('AWS_STORAGE_BUCKET_NAME'),
-            "querystring_auth": setting('AWS_QUERYSTRING_AUTH', True),
-            "querystring_expire": setting('AWS_QUERYSTRING_EXPIRE', 3600),
-            "signature_version": setting('AWS_S3_SIGNATURE_VERSION'),
-            "location": setting('AWS_LOCATION', ''),
-            "custom_domain": setting('AWS_S3_CUSTOM_DOMAIN'),
+            "access_key": get_setting('AWS_S3_ACCESS_KEY_ID', get_setting('AWS_ACCESS_KEY_ID')),
+            "secret_key": get_setting('AWS_S3_SECRET_ACCESS_KEY', get_setting('AWS_SECRET_ACCESS_KEY')),
+            "file_overwrite": get_setting('AWS_S3_FILE_OVERWRITE', True),
+            "object_parameters": get_setting('AWS_S3_OBJECT_PARAMETERS', {}),
+            "bucket_name": get_setting('AWS_STORAGE_BUCKET_NAME'),
+            "querystring_auth": get_setting('AWS_QUERYSTRING_AUTH', True),
+            "querystring_expire": get_setting('AWS_QUERYSTRING_EXPIRE', 3600),
+            "signature_version": get_setting('AWS_S3_SIGNATURE_VERSION'),
+            "location": get_setting('AWS_LOCATION', ''),
+            "custom_domain": get_setting('AWS_S3_CUSTOM_DOMAIN'),
             "cloudfront_signer": cloudfront_signer,
-            "addressing_style": setting('AWS_S3_ADDRESSING_STYLE'),
-            "secure_urls": setting('AWS_S3_SECURE_URLS', True),
-            "file_name_charset": setting('AWS_S3_FILE_NAME_CHARSET', 'utf-8'),
-            "gzip": setting('AWS_IS_GZIPPED', False),
-            "gzip_content_types": setting('GZIP_CONTENT_TYPES', (
+            "addressing_style": get_setting('AWS_S3_ADDRESSING_STYLE'),
+            "secure_urls": get_setting('AWS_S3_SECURE_URLS', True),
+            "file_name_charset": get_setting('AWS_S3_FILE_NAME_CHARSET', 'utf-8'),
+            "gzip": get_setting('AWS_IS_GZIPPED', False),
+            "gzip_content_types": get_setting('GZIP_CONTENT_TYPES', (
                 'text/css',
                 'text/javascript',
                 'application/javascript',
                 'application/x-javascript',
                 'image/svg+xml',
             )),
-            "url_protocol": setting('AWS_S3_URL_PROTOCOL', 'http:'),
-            "endpoint_url": setting('AWS_S3_ENDPOINT_URL'),
-            "proxies": setting('AWS_S3_PROXIES'),
-            "region_name": setting('AWS_S3_REGION_NAME'),
-            "use_ssl": setting('AWS_S3_USE_SSL', True),
-            "verify": setting('AWS_S3_VERIFY', None),
-            "max_memory_size": setting('AWS_S3_MAX_MEMORY_SIZE', 0),
-            "default_acl": setting('AWS_DEFAULT_ACL', None),
+            "url_protocol": get_setting('AWS_S3_URL_PROTOCOL', 'http:'),
+            "endpoint_url": get_setting('AWS_S3_ENDPOINT_URL'),
+            "proxies": get_setting('AWS_S3_PROXIES'),
+            "region_name": get_setting('AWS_S3_REGION_NAME'),
+            "use_ssl": get_setting('AWS_S3_USE_SSL', True),
+            "verify": get_setting('AWS_S3_VERIFY', None),
+            "max_memory_size": get_setting('AWS_S3_MAX_MEMORY_SIZE', 0),
+            "default_acl": get_setting('AWS_DEFAULT_ACL', None),
         }
 
     def __getstate__(self):
@@ -521,7 +524,7 @@ class S3Boto3Storage(BaseStorage):
         """
         name = self._normalize_name(self._clean_name(name))
         entry = self.bucket.Object(name)
-        if setting('USE_TZ'):
+        if get_setting('USE_TZ'):
             # boto3 returns TZ aware timestamps
             return entry.last_modified
         else:
